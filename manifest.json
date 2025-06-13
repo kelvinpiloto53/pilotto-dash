@@ -1,13 +1,4 @@
 
-    =================================================================
-    INSTRUÇÕES DO MANIFEST.JSON
-    =================================================================
-    Para usar este Power-Up, você precisa de um arquivo `manifest.json`.
-    1. Crie um arquivo chamado `manifest.json` no mesmo diretório.
-    2. Copie e cole o conteúdo abaixo.
-    3. **IMPORTANTE**: Substitua a URL em `connectorUrl` pela URL PÚBLICA onde
-       você hospedará este arquivo HTML (ex: Glitch, Netlify).
-    4. Gere um ID único (UUID) e substitua no campo `id`.
 
     {
       "name": "Pilotto Dash Reports",
