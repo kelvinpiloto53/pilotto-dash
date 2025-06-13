@@ -2,40 +2,147 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Teste Mínimo de Power-Up</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power-Up de Relatórios do Trello</title>
+    <!-- Tailwind CSS para estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <!-- Biblioteca cliente oficial do Trello Power-Up -->
     <script src="https://p.trellocdn.com/power-up.min.js"></script>
+    <!-- Chart.js para criar os gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Day.js para manipulação e formatação de datas -->
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/duration.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/pt-br.js"></script>
+    <!-- Fonte Inter para uma UI mais agradável -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
 </head>
-<body>
-    <!-- Esta página permanecerá em branco. Ela só serve para inicializar o Power-Up. -->
+<body class="bg-gray-100">
+    <!--
+    =================================================================
+    VERSÃO FINAL E AUTOCONTIDA
+    =================================================================
+    Este arquivo único contém toda a lógica necessária.
+    Não utiliza um arquivo manifest.json.
+    =================================================================
+    -->
+
+    <div id="app" class="h-screen w-screen p-4 flex items-center justify-center">
+        <!-- O conteúdo do modal (configuração ou relatório) será renderizado aqui -->
+    </div>
+
     <script>
-        // Ícone simples para o botão.
-        const ICONE = 'https://cdn.glitch.com/b2a19765-b442-4161-9870-8716762a6d71%2Fgraph.svg?v=1602162233638';
+        // Configurações Globais
+        dayjs.extend(dayjs_plugin_relativeTime);
+        dayjs.extend(dayjs_plugin_duration);
+        dayjs.locale('pt-br');
+        
+        const ICONE_GRAFICO = 'https://cdn-icons-png.flaticon.com/512/854/854886.png';
+        const DONE_LIST_IDS_KEY = 'report-powerup-done-list-ids';
 
-        console.log('Power-Up de Teste Mínimo a ser inicializado...');
+        // --- FUNÇÕES DE RENDERIZAÇÃO DA INTERFACE ---
+        const renderLoading = (t) => {
+            const appDiv = document.getElementById('app');
+            if (appDiv) {
+                appDiv.innerHTML = `<div class="text-center"><svg class="animate-spin h-8 w-8 text-gray-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p class="mt-2 text-lg font-semibold text-gray-700">A analisar o quadro...</p></div>`;
+            }
+        };
 
-        // Inicialização mais simples possível.
+        const renderSettings = (t, lists) => {
+            const appDiv = document.getElementById('app');
+            if (!appDiv) return;
+
+            const listOptions = lists.map(list => `<label class="flex items-center space-x-3 p-3 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition"><input type="checkbox" name="done-list" value="${list.id}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span class="text-gray-800 font-medium">${list.name}</span></label>`).join('');
+            
+            appDiv.innerHTML = `<div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full"><h2 class="text-2xl font-bold text-gray-800 mb-2">Configuração Inicial</h2><p class="text-gray-600 mb-6">Para gerar relatórios, selecione quais listas representam tarefas concluídas.</p><div class="space-y-3 max-h-60 overflow-y-auto p-2 bg-gray-50 rounded-lg">${listOptions}</div><button id="save-settings-btn" class="mt-8 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">Guardar e Gerar Relatório</button></div>`;
+            
+            document.getElementById('save-settings-btn').addEventListener('click', async () => {
+                const selectedLists = Array.from(document.querySelectorAll('input[name="done-list"]:checked')).map(el => el.value);
+                if (selectedLists.length === 0) {
+                    t.alert({ message: 'Por favor, selecione pelo menos uma lista.', duration: 5 });
+                    return;
+                }
+                await t.set('board', 'private', DONE_LIST_IDS_KEY, selectedLists);
+                // Após guardar, recarrega o conteúdo do modal para mostrar o relatório
+                showReport(t);
+            });
+        };
+
+        const renderReport = (t, data) => {
+            const appDiv = document.getElementById('app');
+            if (!appDiv) return;
+
+            appDiv.innerHTML = `<div class="w-full h-full bg-gray-50 rounded-lg shadow-xl overflow-y-auto p-6"><header class="flex justify-between items-center mb-6 border-b pb-4"><h1 class="text-3xl font-extrabold text-gray-900">Dashboard de Relatórios</h1><button id="close-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Fechar</button></header><div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"><div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500"><h3 class="text-gray-500 font-semibold">Total de Cartões</h3><p class="text-4xl font-bold text-gray-900">${data.kpis.totalCards}</p></div><div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-green-500"><h3 class="text-gray-500 font-semibold">Cartões Concluídos</h3><p class="text-4xl font-bold text-gray-900">${data.kpis.completedCards}</p></div><div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500"><h3 class="text-gray-500 font-semibold">Cartões Atrasados</h3><p class="text-4xl font-bold text-gray-900">${data.kpis.overdueCards}</p></div></div><div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8"><div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-md"><h3 class="font-bold text-xl mb-4 text-gray-800">Cartões por Coluna</h3><canvas id="list-chart"></canvas></div><div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-md"><h3 class="font-bold text-xl mb-4 text-gray-800">Cartões por Membro</h3><canvas id="member-chart"></canvas></div></div><div class="bg-white p-6 rounded-xl shadow-md"><h3 class="font-bold text-xl mb-4 text-gray-800">Análise Detalhada dos Cartões</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left text-gray-600"><thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="px-6 py-3">Cartão</th><th scope="col" class="px-6 py-3">Estado</th><th scope="col" class="px-6 py-3">Criado em</th><th scope="col" class="px-6 py-3">Prazo</th><th scope="col" class="px-6 py-3">Última Atividade</th><th scope="col" class="px-6 py-3">Tempo de Ciclo</th></tr></thead><tbody>${data.cardDetails.map(card => `<tr class="bg-white border-b hover:bg-gray-50"><td class="px-6 py-4 font-medium text-gray-900"><a href="${card.url}" target="_blank" class="hover:underline">${card.name}</a></td><td class="px-6 py-4"><span class="px-2 py-1 font-semibold leading-tight rounded-full ${card.status.color}">${card.status.text}</span></td><td class="px-6 py-4">${card.creationDate}</td><td class="px-6 py-4">${card.dueDate || 'N/D'}</td><td class="px-6 py-4">${card.lastActivity}</td><td class="px-6 py-4">${card.cycleTime}</td></tr>`).join('')}</tbody></table></div></div></div>`;
+            
+            const listChartCtx = document.getElementById('list-chart');
+            if(listChartCtx) new Chart(listChartCtx.getContext('2d'), { type: 'bar', data: { labels: data.listChartData.labels, datasets: [{ label: 'Nº de Cartões', data: data.listChartData.values, backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+            
+            const memberChartCtx = document.getElementById('member-chart');
+            if(memberChartCtx) new Chart(memberChartCtx.getContext('2d'), { type: 'doughnut', data: { labels: data.memberChartData.labels, datasets: [{ label: 'Cartões', data: data.memberChartData.values, backgroundColor: ['rgba(255, 99, 132, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(75, 192, 192, 0.7)', 'rgba(153, 102, 255, 0.7)', 'rgba(255, 159, 64, 0.7)'], borderColor: '#fff', borderWidth: 2 }] }, options: { responsive: true, plugins: { legend: { position: 'right', labels: { boxWidth: 20 } } } } });
+            
+            document.getElementById('close-btn').addEventListener('click', () => t.closeModal());
+        };
+
+        // --- FUNÇÕES DE PROCESSAMENTO DE DADOS ---
+        const getCreationDateFromCardId = (cardId) => dayjs(parseInt(cardId.substring(0, 8), 16) * 1000);
+        const formatDuration = (start, end) => { const d = dayjs.duration(dayjs(end).diff(dayjs(start))); const days = Math.floor(d.asDays()); const h = d.hours(); return days > 0 ? `${days}d ${h}h` : h > 0 ? `${h}h ${d.minutes()}m` : `${d.minutes()}m`; };
+        const processData = (cards, lists, members, doneListIds) => { const now = dayjs(); let completedCards = 0, overdueCards = 0; const listCounts = {}; lists.forEach(l => { listCounts[l.id] = { name: l.name, count: 0 }; }); const memberCounts = {}; members.forEach(m => { memberCounts[m.id] = { name: m.fullName || m.username, count: 0 }; }); memberCounts['unassigned'] = { name: 'Não atribuído', count: 0 }; const cardDetails = cards.map(card => { if(listCounts[card.idList]) listCounts[card.idList].count++; if (card.idMembers.length > 0) { card.idMembers.forEach(id => { if(memberCounts[id]) memberCounts[id].count++; }); } else { memberCounts['unassigned'].count++; } let status = { text: 'No Prazo', color: 'bg-blue-100 text-blue-800' }; const isDone = doneListIds.includes(card.idList); if (isDone) { completedCards++; status = { text: 'Concluído', color: 'bg-green-100 text-green-800' }; } else if (card.due && !card.dueComplete && now.isAfter(dayjs(card.due))) { overdueCards++; status = { text: 'Atrasado', color: 'bg-red-100 text-red-800' }; } const creationDate = getCreationDateFromCardId(card.id); return { name: card.name, url: card.url, status: status, creationDate: creationDate.format('DD/MM/YYYY'), dueDate: card.due ? dayjs(card.due).format('DD/MM/YYYY') : null, lastActivity: dayjs(card.dateLastActivity).fromNow(), cycleTime: formatDuration(creationDate, card.dateLastActivity) }; }); const listChartData = { labels: Object.values(listCounts).map(l => l.name), values: Object.values(listCounts).map(l => l.count) }; const memberChartData = { labels: Object.values(memberCounts).filter(m => m.count > 0).map(m => m.name), values: Object.values(memberCounts).filter(m => m.count > 0).map(m => m.count) }; return { kpis: { totalCards: cards.length, completedCards, overdueCards }, listChartData, memberChartData, cardDetails }; };
+
+        // --- LÓGICA DE RENDERIZAÇÃO DO MODAL ---
+        const showReport = async (t) => {
+            renderLoading(t);
+            try {
+                const doneListIds = await t.get('board', 'private', DONE_LIST_IDS_KEY);
+                if (!doneListIds || doneListIds.length === 0) {
+                    const lists = await t.lists('id', 'name');
+                    renderSettings(t, lists);
+                } else {
+                    const [cards, lists, members] = await Promise.all([t.cards('all'), t.lists('all'), t.members('all')]);
+                    const processedData = processData(cards, lists, members, doneListIds);
+                    renderReport(t, processedData);
+                }
+            } catch (error) {
+                console.error("Erro ao carregar os dados:", error);
+                t.alert({ message: 'Falha ao carregar os dados do quadro.', duration: 6 });
+                t.closeModal();
+            }
+        };
+
+        // =================================================================
+        // INICIALIZAÇÃO DO POWER-UP - PONTO CENTRAL
+        // =================================================================
         TrelloPowerUp.initialize({
-            // A única capacidade que estamos a testar.
-            'board-buttons': function(t, options) {
-                console.log('Capacidade board-buttons foi chamada pelo Trello.');
-                // Retorna a definição do nosso botão.
+            'board-buttons': (t, options) => {
                 return [{
-                    icon: ICONE,
-                    text: 'Teste', // Texto simples para o botão.
-                    // Quando o botão for clicado, mostra um alerta simples.
-                    callback: function(t) {
-                        console.log('Botão de teste foi clicado.');
-                        return t.alert({
-                            message: 'O Power-Up funciona!',
-                            duration: 5,
+                    icon: ICONE_GRAFICO,
+                    text: 'Relatório do Quadro',
+                    callback: (t_button) => {
+                        return t_button.modal({
+                            // Aponta para este mesmo ficheiro para renderizar o conteúdo
+                            url: './index.html',
+                            title: 'Relatório do Quadro',
+                            fullscreen: true,
                         });
-                    },
+                    }
                 }];
             }
         });
+        
+        // Se a página for carregada dentro de um modal, executa a lógica do relatório.
+        // O Trello adiciona um parâmetro 'pop-up' à URL do iframe.
+        if (window.location.search.includes('pop-up')) {
+            const t = window.TrelloPowerUp.iframe();
+            showReport(t);
+        }
 
-        console.log('Inicialização do Power-Up de Teste Mínimo concluída.');
     </script>
 </body>
 </html>
