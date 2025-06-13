@@ -15,7 +15,7 @@
       "description": "Gera um dashboard com relatórios sobre os cards do quadro.",
       "author": "Kelvin Piloto",
       "version": "1.0.0",
-      "connectorUrl": "./index.html",
+      "connectorUrl": "https://kelvinpiloto53.github.io/pilotto-dash/",
       "privacyUrl": "",
       "capabilities": [
         "board-buttons",
